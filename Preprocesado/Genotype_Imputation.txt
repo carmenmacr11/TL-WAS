@@ -1,0 +1,45 @@
+Realizaremos la imputación de genotipos utilizando el software PLINK y el Servidor de Imputación de Michigan. Nuestros datos de entrada son GRCh37/hg19 y utilizaremos solo el conjunto de datos QCed para el cromosoma 22.
+
+1. Dividir el conjunto de datos de prueba QCed en archivos separados para cada cromosoma utilizando PLINK (--chr) y convertir los archivos de cromosomas divididos al formato VCF (--recode vcf bgz) requerido por el Servidor de Imputación de Michigan.
+
+plink --bfile DB_A_v12 --recode vcf bgz --snps-only just-acgt --chr 22 --out DB_A_v12_chr22
+
+NOTA: Según las instrucciones de los servidores de imputación, si sus datos de entrada son GRCh37/hg19, asegúrese de que los cromosomas estén codificados sin prefijo (por ejemplo, 20). Si sus datos de entrada son GRCh38/hg38, asegúrese de que los cromosomas estén codificados con el prefijo 'chr' (por ejemplo, chr20).
+PLINK crea archivos sin prefijo por defecto. Puede agregar la opción para codificar con el prefijo 'chr': --output-chr chrM
+
+2. Ingresa al sitio web del Michigan Imputation Server (https://imputationserver.sph.umich.edu/) y crea una cuenta.
+3. Después de iniciar sesión, haz clic en el botón "Run" y selecciona "Genotype Imputation (Mimimac4)" como software de imputación.
+4. Se elige el panel de referencia que mejor se ajuste a tu genotipo. 
+5. Carga tus archivos 'vcf.gz' en el servidor.
+6. Especifica el conjunto de variantes objetivo y otras opciones de imputación según tus requisitos:
+Filtro rsq: 0.3 (para minimizar el tamaño del archivo de salida excluyendo genotipos con baja puntuación de información)
+Faseo: Beagle 5.4
+Población: (según el conjunto de datos de prueba)
+Modo: Control de calidad e imputación
+Envía tu trabajo de imputación en el Michigan Imputation Server.
+
+7. Si encuentras un error en este paso que implica una inversión de la hebra, ve al conjunto de datos original y invierte los alelos.
+Primero descarga el archivo "snps_excluded.txt" desde el servidor.
+
+Para invertir los SNP que dan error, debemos convertir los nombres de los SNP a rsIDs mediante R.
+#Upload your files to the R/RStudio
+DB_A_v12 <- read.delim("DB_A_v12.bim", header=FALSE)
+snps.excluded <- read.delim("snps-excluded.txt", header=FALSE)
+
+# Rename columns using the rename() function
+library(dplyr)
+DB_A_v12 <- rename(DB_A_v12, chr = V1, rsID = V2, CM = V3, BP = V4, A1 = V5, A2 = V6)
+snps.excluded <- rename(snps.excluded, SNP = V1)
+
+# Merge the two data frames based on the matching columns
+DB_A_v12$SNP <- paste(DB_A_v12$chr, DB_A_v12$BP, DB_A_v12$A2, DB_A_v12$A1, sep = ":")
+matched_rows <- merge(DB_A_v12, snps.excluded, by = c("SNP"))
+
+# Save the column as a text file without a header
+write.table(matched_rows$rsID, file = "flip_snps.txt", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+plink --bfile DB_A_v12 --flip flip_snps.txt --make-bed  --out DB_A_v12_flipped
+
+8. Repite los pasos desde "Paso 1" con un nuevo nombre de archivo y vuelve a enviar el trabajo.
+
+
