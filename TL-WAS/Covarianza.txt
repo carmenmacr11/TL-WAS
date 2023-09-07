@@ -1,0 +1,30 @@
+##Se crea la covarianza para  modelo de colon y sangre:
+export MODEL="/mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/# ruta_del_modelo.db"
+export METAXCAN="/mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/MetaXcan_tutorial/MetaXcan/software" # rutal del sofware donde está instalado MetaXcan
+python3 $METAXCAN/M01_covariances_correlations.py \
+--weight_db $MODEL \
+--input_folder /mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/OMICSPRED/genotypes_EUR \ # se utiliza la población europea 
+--delimiter $'\t' \
+--covariance_output /mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/# ruta_output_Modelo_EUR_COVAR.txt.gz
+#En este caso, el output tenía en los números con decimales , en vez de . así que hice un cambio dentro de sqlite3
+update weights set weight = REPLACE(weight,",",".");
+#Hay que modificar la covarianza
+#Aparecieron ciertos elementos duplicados dentro del archivo de covarianza (mismo rsid para mismo gen más de una vez), debido a ello, tuve que modificarla dentro de R para corregirla y generar un archivo correcto sin duplicados:
+COVAR= read.csv("Modelo_EUR_COVAR_sort_uniq.txt", header=TRUE, sep=" ")
+#Función "duplicated" para crear un vector booleano "ind" con los valores "TRUE" para las filas que contienen valores duplicados en las columnas 1 a 3 del dataframe "COVAR".
+ind = duplicated(COVAR[,1:3])
+df = data.frame(matrix(ncol=5, nrow=nrow(COVAR)))
+colnames(df)= c("GENE", "RSID1", "RSID2", "VALUE", "REP")
+df$GENE = COVAR$GENE
+df$RSID1 = COVAR$RSID1
+df$RSID2 = COVAR$RSID2
+df$VALUE = COVAR$VALUE
+df$REP = ind
+write.csv(df, file="Modelo_EUR_COVAR_R.txt")
+#Este archivo tendrá una columna adicional donde se indica como "TRUE" las líneas duplicadas, para ello primero modifico el formato quitando las comillas y me quedo con las líneas en las que no se encuentra la palabra "TRUE" (Todo esto es en bash)
+sed -i s'/"//g' Modelo_EUR_COVAR_R.txt
+grep -v "TRUE" Modelo_EUR_COVAR_R.txt > Modelo_EUR_COVAR_R_FALSE.txt 
+cut -d , -f 2,3,4,5 Modelo_EUR_COVAR_R_FALSE.txt  > Modelo_EUR_COVAR_R_CUT.txt
+sed -i s'/,/ /g'  Modelo_EUR_COVAR_R_CUT.txt
+#Importante, los rsids en el archivo de covarianza deben de ser únicos y deben de ir en orden, para ello, cada vez que se genere un archivo de covarianza para un modelo que venga de TL-QTLs se ordenan y nos quedamos con las líneas únicas como puedes ver más abajo.
+cat Modelo_EUR_COVAR_R_CUT.txt | sort | uniq > Modelo_EUR_COVAR_R_PIPELINE_R.txt

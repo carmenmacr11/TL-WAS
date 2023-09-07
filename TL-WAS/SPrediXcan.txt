@@ -1,0 +1,49 @@
+#En este caso, vamos a generar modelos de s-predixcan del estudio de la longitud de los telómeros para los dos tejidos de interés. La información para la contrucción del modelo viene dada por la herramienta tensorQTL, que hemos pasado a formato txt. 
+#El primer paso fue abrir el archivo con excel y crear una tabla con el formato de weights.out con los campos que nos interesan:
+gene;chromosome;position;ref_allele;eff_allele;enet;new_id
+#El siguiente paso es:
+#Pasamos a R
+suppressPackageStartupMessages(library(RSQLite))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(data.table))
+weights = read.delim("weights_out.txt", header=TRUE, sep = ";", dec=".")
+
+#Creo columna varID
+weights$varID <- paste(paste("chr", weights$chromosome, sep = ""), weights$position, weights$ref_allele, weights$eff_allele, "b37", sep = "_")
+weights <- weights %>% select(gene, new_id, varID, ref_allele, eff_allele, enet) %>% rename(weight = enet, rsid = new_id)
+#Creo tabla extra
+extra <- weights %>% group_by(gene) %>% summarise(n.snps.in.model = n())
+extra$genename <- NA
+extra$pred.perf.R2 <- NA
+extra$pred.perf.pval <- NA
+extra$pred.perf.qval <- NA
+extra <- extra[c(1, 3, 2, 4, 5, 6)]
+#Paso el modelo a .db
+model_db = glue::glue("Modelo_Colon.db") # Se realiza el mismo proceso con los datos obtenidos para sangre Modelo_Sangre.db
+conn <- dbConnect(RSQLite::SQLite(), model_db)
+dbWriteTable(conn, "weights", weights)
+dbWriteTable(conn, "extra", extra)
+#Compruebo que todo ok
+dbListTables(conn)
+dbGetQuery(conn, 'SELECT * FROM weights') %>% head
+dbGetQuery(conn, 'SELECT * FROM extra') %>% head
+dbDisconnect(conn)
+
+
+# Corremos S-PrediCcan con el modelo que hemos generado, primero para la mucosa colónica y luego para sangre
+#Corro s-predixcan
+export MODEL="/home/otras/fmx/fgs/LUSTRE/# ruta_del_modelo.db"
+export COVAR="/home/otras/fmx/fgs/LUSTRE/# ruta_de_la_covarianza_EUR_COVAR_R_PIPELINE_R.txt.gz"
+export METAXCAN="/mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/MetaXcan_tutorial/MetaXcan/software" # ruta del sofware
+export DATA="/mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/US_UK_meta_0.4/US_UK_ASN/GWAS_only_one_file" # ruta del estudio de asociación que relacionará el CCR con la longitud de los TL
+
+$METAXCAN/SPrediXcan.py \
+--model_db_path $MODEL \
+--covariance $COVAR \
+--gwas_folder $DATA \
+--snp_column SNP \
+--effect_allele_column A2 \
+--non_effect_allele_column A1 \
+--beta_column b \
+--pvalue_column p \
+--output_file /home/otras/fmx/fgs/LUSTRE/# ruta_del_output_con_los_resultados.csv

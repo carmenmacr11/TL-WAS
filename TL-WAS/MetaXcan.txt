@@ -1,0 +1,27 @@
+##Una vez tienes todos los tejidos de interés analizados con PrediXcan, usamos MetaXcan como métodos de múltiples tejidos. MultiXcan.py utiliza como entrada los niveles previstos generados por PrediXcan.py.
+#MULTIXCAN#
+#Para ello, creamos una carpeta donde ponemos los modelos juntos.
+export MODEL="/mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/# ruta_de_los_modelos"
+#Creamos otra carpeta y ponemos su path con los resultados de s-predixcan de cada tejido individual.
+export RESULTS="/mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/# ruta_con_el resultado_modelos"
+#Indicamos la ruta de la covarianza conjunta, esto será una covarianza que haces conjuntamente para todos los modelos individuales:
+export COVAR="/mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/# ruta_covarianza_conjunta"
+#Indicamos la ruta a los resultados del GWAS cuyo fenotipo es el CCR.
+export DATA="/mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/#ruta_GWAS"
+#Indicas output
+export OUTPUT="/mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/# ruta_output.txt"
+#Y software.
+export METAXCAN="/mnt/lustre/scratch/nlsas/home/otras/fmx/fgs/MetaXcan_tutorial/MetaXcan/software"
+$METAXCAN/MulTiXcan.py \
+--models_folder $MODEL \
+--snp_covariance $COVAR \
+--metaxcan_folder $RESULTS \
+--gwas_folder $DATA \
+#Para los resultados de MetaXcan introducimos un filtro, en este caso buscamos los archivos en la carpeta $RESULTS y nos quedamos solo con los que terminan en .csv
+--metaxcan_filter ".*csv" \
+--metaxcan_file_name_parse_pattern "spredixcan_(.*)_M_(.*).csv" \
+--snp_column SNP --non_effect_allele_column A1 --effect_allele_column A2 --beta_column b --pvalue_column p --se_column se \
+--cutoff_condition_number 30 \
+--verbosity 7 \
+--throw \
+--output $OUTPUT
